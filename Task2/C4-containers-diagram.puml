@@ -1,0 +1,109 @@
+@startuml
+!include https://raw.githubusercontent.com/plantuml-stdlib/C4-PlantUML/master/C4_Container.puml
+
+title Диаграмма контейнеров C4 (уровень 2) – Целевая архитектура MVP\n"Медикаменте" (To-Be)
+
+' Внешние пользователи (для контекста)
+Person(patient, "Пациент")
+Person(admin, "Ресепшен")
+Person(doctor, "Врач")
+Person(cashier, "Кассир")
+Person(accountant, "Бухгалтер")
+Person(storekeeper, "Склад")
+Person(analyst, "Аналитик")
+
+' Внешняя система
+System(lab, "Лаборатория")
+
+' Граница системы
+System_Boundary(medikamente, "Медикаменте (MVP)") {
+
+  ' Контейнеры – веб-приложения
+  Container(portal_ui, "Портал (UI)", "React / Vue.js", "Интерфейс для пациентов и сотрудников")
+  Container(mobile_app, "Мобильное приложение", "React Native / Flutter", "Приложение для пациентов (самозапись, уведомления)")
+
+  ' Контейнеры – бэкенд
+  Container(api_gw, "API Gateway", "Kong / Spring Cloud Gateway", "Аутентификация, rate limiting, валидация")
+  Container(backend_core, "Backend Core", "Java / Spring Boot", "Микросервисы: Patient, Appointment, Payment, Notification, etc.")
+  Container(iam, "IAM", "Keycloak", "Аутентификация, SSO, MFA, интеграция с AD")
+  Container(policy_engine, "Policy Engine", "Open Policy Agent (OPA)", "Централизованная политика доступа (ABAC)")
+  Container(tagging_service, "Tagging Service", "Apache Atlas / OpenMetadata", "Управление тегами и метаданными")
+  Container(encryption_mgmt, "Encryption Service", "HashiCorp Vault", "Управление ключами, шифрование/дешифрование")
+  Container(audit_service, "Audit Service", "ELK Stack + custom", "Сбор логов, аудит, визуализация")
+  Container(anonymization_svc, "Anonymization Service", "Python / Spark", "Обезличивание данных, маскирование, k‑анонимность")
+  Container(data_lake, "Data Lake", "ClickHouse / HDFS", "Хранилище обезличенных данных для аналитики")
+
+  ' Базы данных
+  ContainerDb(operational_db, "Operational DB", "PostgreSQL (шифрованная)", "Операционные данные пациентов, записей, платежей")
+  ContainerDb(metadata_db, "Metadata DB", "PostgreSQL + Elasticsearch", "Метаданные, теги, классификация")
+  ContainerDb(audit_db, "Audit Logs", "Elasticsearch", "Логи доступа и операций")
+  ContainerDb(cache, "Cache", "Redis", "Кеш для сессий, токенов, временных данных")
+}
+
+' Связи между контейнерами (включая кэш)
+Rel(patient, portal_ui, "Запись, оплата", "HTTPS")
+Rel(patient, mobile_app, "Уведомления, самозапись", "HTTPS")
+Rel(admin, portal_ui, "Управление", "HTTPS")
+Rel(doctor, portal_ui, "Медицинская работа", "HTTPS")
+Rel(cashier, portal_ui, "Оплата", "HTTPS")
+Rel(accountant, portal_ui, "Бухгалтерия", "HTTPS")
+Rel(storekeeper, portal_ui, "Склад", "HTTPS")
+Rel(analyst, data_lake, "Отчёты, ML", "HTTPS")
+
+' Внутренние связи
+Rel(portal_ui, api_gw, "Все запросы")
+Rel(mobile_app, api_gw, "Все запросы")
+Rel(api_gw, iam, "Аутентификация")
+Rel(api_gw, backend_core, "Маршрутизация")
+
+' Backend core связи
+Rel(backend_core, policy_engine, "Проверка доступа")
+Rel(backend_core, operational_db, "CRUD (шифрованно)")
+Rel(backend_core, encryption_mgmt, "Шифрование")
+Rel(backend_core, audit_service, "Логирование")
+Rel(backend_core, tagging_service, "Применение тегов")
+Rel(backend_core, anonymization_svc, "Отправка на обезличивание")
+Rel(backend_core, cache, "Чтение/запись кеша")
+Rel(backend_core, lab, "Запросы к лаборатории", "mTLS")
+
+' IAM использует кэш для токенов/сессий
+Rel(iam, cache, "Кеширование сессий")
+
+' Анонимизация → Data Lake
+Rel(anonymization_svc, data_lake, "Запись обезличенных данных")
+
+' Лаборатория → Backend
+Rel(lab, backend_core, "Результаты", "mTLS")
+
+' Аудит и тегирование
+Rel(audit_service, audit_db, "Сохранение логов")
+Rel(tagging_service, metadata_db, "Хранение метаданных")
+
+' Пояснения (многострочные)
+note bottom of policy_engine
+  <color:green>ABAC на основе тегов данных</color>
+end note
+
+note bottom of anonymization_svc
+  <color:green>Удаляет ПДн/PII, применяет</color>
+  <color:green>k‑анонимность и дифференциальную</color>
+  <color:green>приватность</color>
+end note
+
+note bottom of data_lake
+  <color:green>Содержит только обезличенные</color>
+  <color:green>данные (без ПДн/PII)</color>
+end note
+
+note bottom of encryption_mgmt
+  <color:green>AES-256-GCM для at rest,</color>
+  <color:green>TLS 1.3 + mTLS для in transit</color>
+end note
+
+note bottom of cache
+  <color:green>Используется для кеширования</color>
+  <color:green>сессий, токенов и временных</color>
+  <color:green>данных (срок жизни короткий)</color>
+end note
+
+@enduml

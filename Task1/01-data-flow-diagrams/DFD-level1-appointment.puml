@@ -1,0 +1,47 @@
+@startuml
+!define RECTANGLE class
+
+title DFD Level 1: Процесс записи к специалисту\n"Медикаменте" - As-Is
+
+actor "Пациент" as Patient
+actor "Администратор" as Admin
+actor "Медицинский\nспециалист" as Doctor
+
+database "Файловый сервер" as FS {
+  file "Journal-Doctor.xlsx" as Journal
+  file "Пациент-карта" as Card
+}
+
+rectangle "Процесс записи" {
+  rectangle "Поиск свободного\nокна" as FindSlot
+  rectangle "Внесение записи" as AddRecord
+  rectangle "Просмотр журнала" as ViewJournal
+  rectangle "Редактирование\nзаписи" as EditRecord
+}
+
+Patient --> Admin : "Запрос на запись"
+Admin --> FindSlot : "Поиск в журнале"
+FindSlot --> Journal : "Чтение"
+
+Admin --> AddRecord : "Добавление пациента"
+AddRecord --> Journal : "Запись (ФИО, телефон,\nвремя, специалист)"
+
+Doctor --> ViewJournal : "Просмотр своего журнала"
+ViewJournal --> Journal : "Чтение"
+
+Doctor --> EditRecord : "Внесение изменений"
+EditRecord --> Journal : "Обновление"
+
+Doctor --> Card : "Просмотр карты пациента"
+Card --> Journal : "Связка по ФИО"
+
+' Проблемные зоны
+note right of Journal
+  <color:red>ПРОБЛЕМЫ:</color>
+  - Файл доступен всем
+  - Нет логирования
+  - Возможность редактирования
+    без контроля
+end note
+
+@enduml

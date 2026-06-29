@@ -1,0 +1,89 @@
+@startuml
+!define RECTANGLE class
+
+title DFD Level 1: Процесс записи к специалисту (Enhanced)\n"Медикаменте" - To-Be
+
+actor "Пациент" as Patient
+actor "Администратор" as Admin
+actor "Медицинский специалист" as Doctor
+
+rectangle "API Gateway" as Gateway
+rectangle "IAM / Keycloak" as IAM
+rectangle "Audit Service" as Audit
+
+rectangle "Процесс записи" {
+  rectangle "Поиск свободного окна" as FindSlot
+  rectangle "Бронирование слота" as BookSlot
+  rectangle "Просмотр журнала" as ViewJournal
+  rectangle "Редактирование записи" as EditRecord
+  rectangle "Маскирование PII" as MaskPII
+}
+
+database "Secure Storage" as Storage {
+  file "Journal (encrypted)" as JournalDB
+  file "Schedule (encrypted)" as ScheduleDB
+}
+
+' Потоки с защитой
+Patient --> Gateway : "HTTPS (TLS 1.3)\nЗапрос на запись"
+Gateway --> IAM : "Аутентификация (JWT)"
+IAM --> Gateway : "Токен доступа"
+Gateway --> FindSlot : "Прокси с валидацией"
+
+Admin --> Gateway : "HTTPS (TLS 1.3)\n+ MFA"
+Gateway --> IAM : "Проверка роли (ADMIN)"
+IAM --> Gateway : "Роль подтверждена"
+Gateway --> BookSlot : "Прокси"
+
+Doctor --> Gateway : "HTTPS (TLS 1.3)\n+ MFA"
+Gateway --> IAM : "Проверка роли (DOCTOR)"
+IAM --> Gateway : "Роль подтверждена"
+Gateway --> ViewJournal : "Прокси с ABAC"
+
+' Основные операции
+FindSlot --> ScheduleDB : "Чтение (только свободные слоты)"
+FindSlot --> Audit : "Логирование (без PII)"
+
+BookSlot --> JournalDB : "Запись (шифрованная)"
+BookSlot --> Audit : "Логирование действия"
+
+ViewJournal --> MaskPII : "Запрос данных"
+MaskPII --> JournalDB : "Чтение"
+MaskPII --> ViewJournal : "Маскированные данные (ФИО: И*****в)"
+ViewJournal --> Audit : "Логирование просмотра"
+
+EditRecord --> JournalDB : "Обновление (с тегами)"
+EditRecord --> Audit : "Логирование изменений"
+
+' Меры защиты
+note right of Gateway
+  <color:green>МЕРЫ ЗАЩИТЫ:</color>
+  - TLS 1.3
+  - Rate limiting
+  - WAF
+  - Валидация DTO
+end note
+
+note right of IAM
+  <color:green>МЕРЫ ЗАЩИТЫ:</color>
+  - MFA для сотрудников
+  - RBAC + ABAC
+  - Интеграция с AD
+end note
+
+note right of MaskPII
+  <color:green>МЕРЫ ЗАЩИТЫ:</color>
+  - Динамическое маскирование
+  - По роли: врач видит ФИО,
+    администратор только инициалы
+end note
+
+note right of JournalDB
+  <color:green>МЕРЫ ЗАЩИТЫ:</color>
+  - AES-256 шифрование
+  - Теги: SENSITIVITY::PII,
+    ACCESS::ROLE_DOCTOR
+  - Retention: 5 лет
+end note
+
+@enduml

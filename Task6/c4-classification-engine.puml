@@ -1,0 +1,98 @@
+@startuml
+!include https://raw.githubusercontent.com/plantuml-stdlib/C4-PlantUML/master/C4_Container.puml
+
+title Диаграмма контейнеров C4 (уровень 2)\nДвижок классификации данных для аналитического хранилища\n"Медикаменте" (To-Be)
+
+' Внешние системы и пользователи
+Person(analyst, "Аналитик / Data Scientist", "Работает с обезличенными данными")
+Person(dpo, "DPO / Security Officer", "Управляет политиками классификации")
+System(operational_db, "Operational DB (PostgreSQL)", "Шифрованные операционные данные")
+System(external_source, "Внешние источники", "Лаборатория, партнёры, файловые загрузки")
+System(legacy, "Легаси-системы", "Excel, 1С, файловый сервер")
+
+' Граница Data Lake
+System_Boundary(data_lake, "Data Lake (Аналитическое хранилище)") {
+  
+  ' 1. Ингейшн и классификация
+  Container(ingestion, "Ingestion Layer", "Apache NiFi / Kafka", "Приём данных из источников, буферизация")
+  Container(schema_registry, "Schema Registry", "Confluent Schema Registry / Avro", "Управление схемами данных, отслеживание изменений")
+  Container(classification_engine, "Classification Engine", "Python / Spark (ML)", "Обнаружение PII, тегирование, классификация")
+  Container(policy_engine, "Policy Engine", "Open Policy Agent (OPA)", "Применение политик на основе тегов")
+  Container(metadata_repo, "Metadata Repository", "Apache Atlas / OpenMetadata", "Хранение тегов, lineage, классификаций")
+  Container(dlp_scanner, "DLP Scanner", "Custom ML models + NLP", "Глубокий анализ содержимого (текст, изображения)")
+  
+  ' 2. Хранилище (зоны)
+  ContainerDb(raw_zone, "Raw Zone", "HDFS / MinIO", "Сырые данные в исходном формате (временное хранение)")
+  ContainerDb(staging_zone, "Staging Zone", "HDFS / MinIO", "Данные после классификации, но до очистки")
+  ContainerDb(classif_zone, "Classified Zone", "ClickHouse / MinIO", "Данные с тегами, классифицированные, с маскированием PII")
+  ContainerDb(analytics_zone, "Analytics Zone", "ClickHouse / Parquet", "Обезличенные агрегаты и ML-фичи, готовые к использованию")
+  
+  ' 3. Управление
+  Container(monitoring, "Monitoring & Alerting", "Prometheus / Grafana / ELK", "Метрики классификации, алерты")
+  Container(audit, "Audit Service", "Custom + ELK", "Логирование всех операций с тегами")
+}
+
+' Внешние связи
+Rel(legacy, ingestion, "Пакетная выгрузка (CSV/Excel)", "SFTP / API")
+Rel(operational_db, ingestion, "CDC (Debezium)", "Kafka")
+Rel(external_source, ingestion, "API / файлы", "HTTPS (TLS 1.3)")
+Rel(analyst, analytics_zone, "Запросы, отчёты, ML", "SQL / JDBC")
+Rel(dpo, metadata_repo, "Управление политиками и тегами", "UI / API")
+
+' Внутренние связи (Ingestion → Классификация)
+Rel(ingestion, schema_registry, "Проверка схемы")
+Rel(ingestion, raw_zone, "Сохранение сырых данных")
+Rel(ingestion, classification_engine, "Передача данных на классификацию")
+
+' Классификация → DLP и политики
+Rel(classification_engine, dlp_scanner, "Запрос на глубокий анализ")
+Rel(classification_engine, policy_engine, "Проверка политик доступа")
+Rel(classification_engine, metadata_repo, "Сохранение тегов и метаданных")
+
+' Маршрутизация данных по зонам (на основе тегов)
+Rel(classification_engine, staging_zone, "Сохранение с тегами")
+Rel(classification_engine, monitoring, "Отправка метрик")
+
+' Staging → Classified (применение маскирования/анонимизации)
+Rel(staging_zone, classif_zone, "Трансформация (маскирование PII)")
+Rel(classif_zone, analytics_zone, "Агрегация и обезличивание")
+
+' Аудит и мониторинг
+Rel(classification_engine, audit, "Логирование классификации")
+Rel(dlp_scanner, audit, "Логирование обнаружений")
+Rel(monitoring, audit, "Алерты → логи")
+
+' Пояснения
+note right of classification_engine
+  <color:green>КЛЮЧЕВОЙ КОМПОНЕНТ:</color>
+  <color:green>Использует ML-модели для</color>
+  <color:green>обнаружения PII в тексте,</color>
+  <color:green>изображениях и структурированных</color>
+  <color:green>данных. Применяет правила</color>
+  <color:green>классификации (regex + NLP).</color>
+end note
+
+note right of dlp_scanner
+  <color:green>ГЛУБОКИЙ АНАЛИЗ:</color>
+  <color:green>NLP для текста, OCR</color>
+  <color:green>для сканов, распознавание</color>
+  <color:green>паттернов (ФИО, СНИЛС,</color>
+  <color:green>номер карты).</color>
+end note
+
+note right of analytics_zone
+  <color:green>АНАЛИТИЧЕСКИЕ ДАННЫЕ:</color>
+  <color:green>Только обезличенные</color>
+  <color:green>данные, готовые для</color>
+  <color:green>BI и ML.</color>
+end note
+
+note right of classif_zone
+  <color:green>КЛАССИФИЦИРОВАННЫЕ ДАННЫЕ:</color>
+  <color:green>Теги: PII_SENSITIVE,</color>
+  <color:green>MEDICAL, FINANCIAL</color>
+  <color:green>Применено маскирование</color>
+  <color:green>для не-аналитических нужд</color>
+end note
+
+@enduml

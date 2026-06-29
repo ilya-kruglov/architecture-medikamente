@@ -1,0 +1,118 @@
+@startuml
+!define RECTANGLE class
+
+title DFD Level 1: Процесс приёма оплаты (Enhanced)\n"Медикаменте" - To-Be
+
+actor "Пациент" as Patient
+actor "Кассир" as Cashier
+actor "Бухгалтер" as Accountant
+
+rectangle "API Gateway" as Gateway
+rectangle "IAM / Keycloak" as IAM
+rectangle "Audit Service" as Audit
+rectangle "Payment Gateway" as PayGateway
+rectangle "Encryption Service" as Encrypt
+
+rectangle "Процесс оплаты" {
+  rectangle "Инициация платежа" as Init
+  rectangle "Проведение через ККМ" as KKMProcess
+  rectangle "Запись в 1С" as Write1C
+  rectangle "Регистрация в системе" as RegisterPay
+  rectangle "Маскирование для отчётов" as MaskForReports
+}
+
+rectangle "1С:Бухгалтерия (облачная)" as AccountingCloud
+rectangle "ККМ (обновлённая)" as KKMCloud
+
+database "Secure Storage" as Storage {
+  file "Payments (encrypted)" as PaymentDB
+  file "Audit logs" as AuditLogs
+}
+
+' --- Потоки данных с защитой ---
+
+' Пациент
+Patient --> Gateway : "HTTPS (TLS 1.3)"
+Gateway --> IAM : "Аутентификация (JWT)"
+IAM --> Gateway : "Токен доступа"
+
+' Кассир
+Cashier --> Gateway : "HTTPS (TLS 1.3) + MFA"
+Gateway --> IAM : "Проверка роли (CASHIER)"
+IAM --> Gateway : "Роль подтверждена"
+Gateway --> Init : "Прокси"
+
+' Инициация платежа
+Init --> PayGateway : "Создание платежа"
+Init --> Audit : "Логирование инициации (без PII)"
+
+' ККМ
+PayGateway --> KKMProcess : "Команда на ККМ"
+KKMProcess --> KKMCloud : "Защищённый канал (mTLS)"
+KKMProcess --> Audit : "Логирование транзакции ККМ"
+
+' 1С
+KKMCloud --> Write1C : "Данные о платеже (зашифровано)"
+Write1C --> AccountingCloud : "Синхронизация (TLS 1.3)"
+Write1C --> Audit : "Логирование синхронизации с 1С"
+
+' Регистрация в системе
+Cashier --> RegisterPay : "Регистрация в системе"
+RegisterPay --> Encrypt : "Шифрование (AES-256)"
+Encrypt --> PaymentDB : "Сохранение"
+RegisterPay --> Audit : "Логирование регистрации"
+
+' Бухгалтер
+Accountant --> Gateway : "HTTPS (TLS 1.3) + MFA"
+Gateway --> IAM : "Проверка роли (ACCOUNTANT)"
+IAM --> Gateway : "Роль подтверждена"
+Gateway --> MaskForReports : "Прокси"
+
+' Отчёты
+MaskForReports --> PaymentDB : "Чтение с маскированием"
+MaskForReports --> Audit : "Логирование доступа к отчётам"
+
+' Сохранение аудита
+Audit --> AuditLogs : "Запись событий (без PII)"
+
+' --- Пояснения и меры защиты ---
+
+note right of PayGateway
+  <color:green>МЕРЫ ЗАЩИТЫ:</color>
+  - Шифрование данных карты
+  - PCI DSS compliance
+  - Токенизация
+end note
+
+note right of KKMCloud
+  <color:green>МЕРЫ ЗАЩИТЫ:</color>
+  - Замена файлового режима
+  - Облачная ККМ с защитой
+  - Аудит всех транзакций
+end note
+
+note right of AccountingCloud
+  <color:green>ПЕРЕХОД НА ОБЛАЧНУЮ 1С (Фреш):</color>
+  - Шифрование at rest / in transit
+  - Соответствие 152‑ФЗ (аттестация провайдера)
+  - Масштабируемость для 5x роста
+  - Альтернатива: on‑premise клиент-серверная 1С с шифрованием и аудитом
+end note
+
+note right of PaymentDB
+  <color:green>МЕРЫ ЗАЩИТЫ:</color>
+  - Шифрование полей с PII
+  - Теги: SENSITIVITY::FINANCIAL
+  - Доступ только у кассиров и бухгалтеров
+  - Retention: 5 лет
+end note
+
+note right of Audit
+  <color:green>МЕРЫ ЗАЩИТЫ:</color>
+  - Логи всех операций
+  - Без PII в логах
+  - Хранение 1 год
+  - Интеграция с SIEM
+end note
+
+@enduml

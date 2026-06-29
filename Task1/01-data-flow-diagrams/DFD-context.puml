@@ -1,0 +1,49 @@
+@startuml
+!define RECTANGLE class
+
+title Контекстная диаграмма потоков данных (DFD Level 0)\n"Медикаменте" - As-Is
+
+' Внешние сущности
+actor "Пациент" as Patient
+actor "Администратор\n(Ресепшен)" as Admin
+actor "Медицинский\nспециалист" as Doctor
+actor "Кассир" as Cashier
+actor "Бухгалтер" as Accountant
+actor "Сотрудник\nсклада" as Storekeeper
+actor "Лаборатория" as Laboratory
+
+' Система
+rectangle "МЕДИКАМЕНТЕ\n(As-Is)" as System {
+  rectangle "Файловый сервер\n(Excel, PDF, JPG)" as FileServer
+  rectangle "1С:Бухгалтерия" as Accounting
+  rectangle "1С:Торговля и склад" as Warehouse
+  rectangle "ККМ" as KKM
+  rectangle "Exchange Mail" as Mail
+}
+
+' Потоки данных (без указания защиты - As-Is)
+Patient --> Admin : "Предоставляет\nперсональные данные"
+Patient --> Cashier : "Оплата услуг"
+Patient --> Doctor : "Медицинские данные"
+
+Admin --> FileServer : "Запись в журналы\n(Excel)"
+Admin --> Patient : "Подтверждение записи"
+
+Doctor --> FileServer : "Просмотр/редактирование\nжурнала"
+Doctor --> Laboratory : "Направление на анализы"
+
+Laboratory --> FileServer : "Результаты анализов\n(Excel)"
+
+Cashier --> KKM : "Проведение платежа"
+KKM --> Accounting : "Данные о платежах\n(OLE/TCP/IP)"
+
+Accountant --> Accounting : "Ведение учёта"
+Accounting --> FileServer : "Экспорт данных\n(Excel)"
+
+Storekeeper --> Warehouse : "Учёт ТМЦ"
+Warehouse --> Accounting : "Данные о ТМЦ\n(OLE)"
+
+Admin --> Mail : "Уведомления"
+Mail --> Patient : "Напоминания"
+
+@enduml
