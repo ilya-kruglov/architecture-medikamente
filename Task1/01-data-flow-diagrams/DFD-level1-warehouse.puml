@@ -1,0 +1,25 @@
+@startuml
+!define RECTANGLE class
+
+title DFD Level 1: Процесс учёта ТМЦ\n"Медикаменте" - As-Is
+
+actor "Сотрудник\nсклада" as Storekeeper
+actor "Бухгалтер" as Accountant
+
+rectangle "1С:Торговля и склад" as Warehouse
+rectangle "1С:Бухгалтерия" as Accounting
+
+Storekeeper --> Warehouse : "Учёт поступления/списания"
+Warehouse --> Accounting : "Передача данных\n(OLE)"
+
+Accountant --> Accounting : "Сверка и учёт"
+
+' Проблемные зоны
+note right of Warehouse
+  <color:red>ПРОБЛЕМЫ:</color>
+  - Файловый режим
+  - Нет разграничения доступа
+  - Интеграция без шифрования
+end note
+
+@enduml

@@ -1,0 +1,52 @@
+@startuml
+!define RECTANGLE class
+
+title DFD Level 1: Процесс приёма оплаты\n"Медикаменте" - As-Is
+
+actor "Пациент" as Patient
+actor "Кассир" as Cashier
+actor "Бухгалтер" as Accountant
+
+rectangle "Процесс оплаты" {
+  rectangle "Формирование\nчека" as Receipt
+  rectangle "Проведение\nплатежа" as Process
+  rectangle "Двойной учёт" as DoubleEntry
+}
+
+database "Файловый сервер" as FS {
+  file "Payments.xlsx" as PaymentFile
+}
+
+rectangle "1С:Бухгалтерия" as Accounting
+rectangle "ККМ" as KKM
+
+Patient --> Cashier : "Оплата наличными/картой"
+Cashier --> Receipt : "Создание чека"
+Receipt --> KKM : "Печать чека"
+KKM --> Accounting : "Данные о платеже\n(OLE/TCP/IP)"
+
+Cashier --> Process : "Проведение платежа"
+Process --> Accounting : "Запись в 1С"
+
+Cashier --> DoubleEntry : "Дублирование в Excel"
+DoubleEntry --> PaymentFile : "Ручной ввод"
+
+Accountant --> Accounting : "Сверка и процессинг"
+
+' Проблемные зоны
+note right of PaymentFile
+  <color:red>ПРОБЛЕМЫ:</color>
+  - Двойной ручной ввод
+  - Риск ошибок
+  - Нет шифрования
+  - Доступ у кассиров и бухгалтеров
+end note
+
+note right of Accounting
+  <color:red>ПРОБЛЕМЫ:</color>
+  - Файловый режим
+  - Нет аудита доступа
+  - OLE-интеграция без защиты
+end note
+
+@enduml

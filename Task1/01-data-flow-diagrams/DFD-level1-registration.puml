@@ -1,0 +1,50 @@
+@startuml
+!define RECTANGLE class
+
+title DFD Level 1: Процесс регистрации пациента\n"Медикаменте" - As-Is
+
+actor "Пациент" as Patient
+actor "Администратор" as Admin
+
+rectangle "Процесс регистрации" {
+  rectangle "Ввод ПДн" as Input
+  rectangle "Запись в Patients.xlsx" as SavePatient
+  rectangle "Создание папки пациента" as CreateFolder
+  rectangle "Запись в журнал специалиста" as WriteJournal
+}
+
+database "Файловый сервер" as FS {
+  file "Patients.xlsx" as PatientFile
+  file "Папка пациента\n(сканы, PDF)" as PatientFolder
+  file "Journal-Doctor.xlsx" as JournalFile
+}
+
+Patient --> Input : "ФИО, дата рождения,\nтелефон, email,\nадрес, место работы,\nхронические заболевания"
+
+Admin --> Input : "Ввод данных вручную"
+Input --> SavePatient : "Сохранение в общий список"
+SavePatient --> PatientFile : "Запись строки"
+
+Input --> CreateFolder : "Создание папки"
+CreateFolder --> PatientFolder : "Сохранение сканов документов"
+
+Admin --> WriteJournal : "Запись к специалисту"
+WriteJournal --> JournalFile : "Добавление записи"
+
+' Проблемные зоны (As-Is) - отмечены красным
+note right of PatientFile
+  <color:red>ПРОБЛЕМЫ:</color>
+  - Нет шифрования
+  - Нет разграничения доступа
+  - Нет аудита
+  - Данные в открытом виде
+end note
+
+note right of PatientFolder
+  <color:red>ПРОБЛЕМЫ:</color>
+  - Сканы содержат ПДн/PII
+  - Нет контроля доступа
+  - Хранятся бессрочно
+end note
+
+@enduml

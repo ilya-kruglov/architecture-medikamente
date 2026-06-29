@@ -1,0 +1,81 @@
+@startuml
+!define RECTANGLE class
+
+title DFD Level 1: Процесс учёта ТМЦ (Enhanced)\n"Медикаменте" - To-Be
+
+actor "Сотрудник склада" as Storekeeper
+actor "Бухгалтер" as Accountant
+
+rectangle "API Gateway" as Gateway
+rectangle "IAM / Keycloak" as IAM
+rectangle "Audit Service" as Audit
+rectangle "Encryption Service" as Encrypt
+
+rectangle "Процесс учёта ТМЦ" {
+  rectangle "Ввод данных о ТМЦ" as Input
+  rectangle "Проверка и тегирование" as Validate
+  rectangle "Запись в систему" as Save
+  rectangle "Синхронизация с 1С" as Sync
+  rectangle "Формирование отчётов" as Reports
+}
+
+rectangle "1С:Торговля и склад (облачная)" as WarehouseCloud
+rectangle "1С:Бухгалтерия (облачная)" as AccountingCloud
+
+database "Secure Storage" as Storage {
+  file "Inventory (encrypted)" as InventoryDB
+}
+
+' Потоки с защитой
+Storekeeper --> Gateway : "HTTPS (TLS 1.3) + MFA"
+Gateway --> IAM : "Проверка роли (STOREKEEPER)"
+IAM --> Gateway : "Роль подтверждена"
+
+Gateway --> Input : "Прокси"
+Input --> Validate : "Валидация"
+Validate --> Encrypt : "Шифрование"
+Encrypt --> Save : "Сохранение"
+Save --> InventoryDB : "AES-256"
+
+Save --> Sync : "Событие синхронизации"
+Sync --> WarehouseCloud : "API (mTLS)"
+WarehouseCloud --> AccountingCloud : "Синхронизация (TLS 1.3)"
+
+Accountant --> Gateway : "HTTPS (TLS 1.3) + MFA"
+Gateway --> IAM : "Проверка роли (ACCOUNTANT)"
+Gateway --> Reports : "Прокси"
+Reports --> InventoryDB : "Чтение (только суммы)"
+Reports --> Audit : "Логирование"
+
+' Меры защиты
+note right of Validate
+  <color:green>МЕРЫ ЗАЩИТЫ:</color>
+  - Автоматическое тегирование
+  - Проверка на PII (не должно быть)
+  - Data validation
+end note
+
+note right of WarehouseCloud
+  <color:green>МЕРЫ ЗАЩИТЫ:</color>
+  - Переход в облако
+  - Ролевой доступ
+  - Шифрование at rest
+  - Аудит всех операций
+end note
+
+note right of InventoryDB
+  <color:green>МЕРЫ ЗАЩИТЫ:</color>
+  - Шифрование AES-256
+  - Теги: SENSITIVITY::OPERATIONAL
+  - Доступ по RBAC
+  - Retention: 3 года
+end note
+
+note right of Sync
+  <color:green>МЕРЫ ЗАЩИТЫ:</color>
+  - Асинхронная очередь (Kafka)
+  - Шифрование in transit
+  - Аудит всех синхронизаций
+end note
+
+@enduml

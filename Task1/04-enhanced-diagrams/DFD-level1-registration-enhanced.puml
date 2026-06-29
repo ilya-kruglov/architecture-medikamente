@@ -1,0 +1,63 @@
+@startuml
+!define RECTANGLE class
+
+title DFD Level 1: Процесс регистрации пациента (Enhanced)\n"Медикаменте" - To-Be
+
+actor "Пациент" as Patient
+actor "Администратор" as Admin
+
+rectangle "Процесс регистрации" {
+  rectangle "Ввод ПДн" as Input
+  rectangle "Валидация и\nтегирование" as Validate
+  rectangle "Шифрование" as Encrypt
+  rectangle "Запись в БД" as Save
+}
+
+database "Secure Storage" as Storage {
+  file "Patients (encrypted)" as PatientDB
+  file "Patient Documents (encrypted)" as DocStore
+}
+
+' Меры защиты
+rectangle "API Gateway" as Gateway
+rectangle "IAM / Keycloak" as IAM
+rectangle "Audit Service" as Audit
+
+Patient --> Gateway : "HTTPS (TLS 1.3)"
+Gateway --> IAM : "Аутентификация"
+IAM --> Gateway : "JWT"
+Gateway --> Input : "Прокси"
+
+Admin --> Gateway : "HTTPS (TLS 1.3)"
+Gateway --> IAM : "Аутентификация (MFA)"
+
+Input --> Validate : "Data validation"
+Validate --> Audit : "Логирование (без PII)"
+Validate --> Encrypt : "AES-256-GCM"
+
+Encrypt --> Save : "Сохранение"
+Save --> PatientDB : "Запись"
+Save --> DocStore : "Сохранение документов"
+
+' Тегирование
+note right of Validate
+  <color:green>МЕРЫ ЗАЩИТЫ:</color>
+  - Автоматическое тегирование
+  - Валидация DTO
+  - Data Minimization
+end note
+
+note right of Encrypt
+  <color:green>МЕРЫ ЗАЩИТЫ:</color>
+  - AES-256 при хранении
+  - Управление ключами (Vault)
+end note
+
+note right of Gateway
+  <color:green>МЕРЫ ЗАЩИТЫ:</color>
+  - TLS 1.3
+  - Rate limiting
+  - WAF
+end note
+
+@enduml

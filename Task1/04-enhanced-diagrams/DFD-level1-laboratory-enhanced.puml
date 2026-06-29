@@ -1,0 +1,82 @@
+@startuml
+!define RECTANGLE class
+
+title DFD Level 1: Процесс взаимодействия с лабораторией (Enhanced)\n"Медикаменте" - To-Be
+
+actor "Медицинский специалист" as Doctor
+actor "Лаборатория" as Laboratory
+
+rectangle "API Gateway" as Gateway
+rectangle "IAM / Keycloak" as IAM
+rectangle "Audit Service" as Audit
+rectangle "Data Anonymization" as Anonymize
+rectangle "DLP Scanner" as DLP
+
+rectangle "Процесс лабораторных исследований" {
+  rectangle "Формирование направления" as Order
+  rectangle "Отправка в лабораторию" as Send
+  rectangle "Приём результатов" as Receive
+  rectangle "Регистрация в реестре" as Register
+  rectangle "Сохранение в карту пациента" as SaveCard
+}
+
+database "Secure Storage" as Storage {
+  file "Registry (encrypted)" as RegistryDB
+  file "Patient Cards (encrypted)" as CardDB
+  file "Outgoing requests (audit)" as Outbox
+}
+
+' Потоки с защитой
+Doctor --> Gateway : "HTTPS (TLS 1.3)\n+ MFA"
+Gateway --> IAM : "Проверка роли (DOCTOR)"
+IAM --> Gateway : "Роль подтверждена"
+
+Gateway --> Order : "Прокси"
+Order --> DLP : "Сканирование на PII"
+DLP --> Order : "Результат сканирования"
+Order --> RegistryDB : "Создание записи (теги: MEDICAL)"
+
+Order --> Send : "Подготовка запроса"
+Send --> Anonymize : "Обезличивание данных\n(удаление ФИО, контактов)"
+Anonymize --> Outbox : "Сохранение для аудита"
+Send --> Laboratory : "Запрос по API (mTLS)"
+
+Laboratory --> Receive : "Результаты (JSON, зашифровано)"
+Receive --> RegistryDB : "Обновление реестра (теги)"
+Receive --> Register : "Регистрация"
+Register --> SaveCard : "Сохранение в карту"
+SaveCard --> CardDB : "Шифрование (AES-256)"
+
+Receive --> DLP : "Сканирование на PII"
+DLP --> Audit : "Логирование"
+
+note right of Anonymize
+  <color:green>МЕРЫ ЗАЩИТЫ:</color>
+  - Удаление ПДн перед отправкой
+  - Принцип Data Minimization
+  - Только ID пациента
+end note
+
+note right of Laboratory
+  <color:green>МЕРЫ ЗАЩИТЫ:</color>
+  - mTLS (взаимная аутентификация)
+  - API-ключ + подпись запросов
+  - Rate limiting
+end note
+
+note right of Outbox
+  <color:green>МЕРЫ ЗАЩИТЫ:</color>
+  - Аудит всех исходящих запросов
+  - Хранение 1 год
+  - Без PII
+end note
+
+note right of RegistryDB
+  <color:green>МЕРЫ ЗАЩИТЫ:</color>
+  - Шифрование at rest
+  - Теги: SENSITIVITY::MEDICAL
+  - Доступ только по ABAC
+  - Retention: 25 лет
+end note
+
+@enduml

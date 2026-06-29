@@ -1,0 +1,45 @@
+@startuml
+!define RECTANGLE class
+
+title DFD Level 1: Процесс взаимодействия с лабораторией\n"Медикаменте" - As-Is
+
+actor "Медицинский\nспециалист" as Doctor
+actor "Лаборатория" as Laboratory
+
+database "Файловый сервер" as FS {
+  file "RegistryByDate.xlsx" as Registry
+  file "Patient-Folder" as PatientFolder
+}
+
+rectangle "Процесс лабораторных исследований" {
+  rectangle "Направление\nна анализы" as Order
+  rectangle "Получение\nрезультатов" as Receive
+  rectangle "Регистрация\nв реестре" as Register
+}
+
+Doctor --> Order : "Формирование направления"
+Order --> Laboratory : "Передача (email/файл)"
+
+Laboratory --> Receive : "Результаты анализов"
+Receive --> PatientFolder : "Сохранение в папку пациента"
+Receive --> Register : "Регистрация в реестре"
+Register --> Registry : "Запись (дата, пациент,\nвид анализа)"
+
+Doctor --> Registry : "Просмотр реестра"
+
+' Проблемные зоны
+note right of Registry
+  <color:red>ПРОБЛЕМЫ:</color>
+  - Содержит ПДн/PII в открытом виде
+  - Доступ у всех врачей
+  - Нет разграничения по видам анализов
+end note
+
+note right of PatientFolder
+  <color:red>ПРОБЛЕМЫ:</color>
+  - Результаты содержат ПДн/PII
+  - Нет шифрования
+  - Не контролируется срок хранения
+end note
+
+@enduml
