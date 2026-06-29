@@ -1,0 +1,72 @@
+@startuml
+!include https://raw.githubusercontent.com/plantuml-stdlib/C4-PlantUML/master/C4_Context.puml
+
+title Диаграмма контекста C4 (уровень 1) – Целевая архитектура MVP\n"Медикаменте" (To-Be)
+
+' Внешние пользователи
+Person(patient, "Пациент", "Записывается на приём, оплачивает услуги, просматривает свои данные")
+Person(admin, "Сотрудник ресепшена", "Регистрирует пациентов, управляет расписанием")
+Person(doctor, "Медицинский специалист", "Ведёт приём, заполняет карту, назначает анализы")
+Person(cashier, "Кассир", "Принимает оплату")
+Person(accountant, "Бухгалтер", "Ведёт учёт платежей и зарплат")
+Person(storekeeper, "Сотрудник склада", "Управляет ТМЦ")
+Person(analyst, "Аналитик / Data Scientist", "Строит отчёты, обучает ML-модели")
+
+' Внешняя система
+System(lab, "Лаборатория", "Внешняя лаборатория, предоставляющая результаты анализов")
+
+' Целевая система (единая платформа)
+System_Boundary(medikamente, "Медикаменте (MVP)") {
+  System(portal, "Портал клиентов и сотрудников", "Веб-интерфейс для самозаписи, просмотра данных, управления")
+  System(api_gw, "API Gateway", "Единая точка входа, валидация, аутентификация")
+  System(backend, "Backend Core", "Бизнес-логика: запись, оплата, управление пациентами")
+  System(iam, "IAM", "Аутентификация, RBAC/ABAC, MFA")
+  System(policy, "Policy Engine (OPA)", "Централизованное применение политик доступа")
+  System(tagging, "Data Tagging Service", "Управление тегами и метаданными")
+  System(encryption, "Encryption & Key Mgmt", "Шифрование, управление ключами (Vault)")
+  System(audit, "Audit & Logging", "Сбор логов, аудит, интеграция с SIEM")
+  System(anonymization, "Anonymization Service", "Обезличивание данных для аналитики")
+  System(data_lake, "Data Lake (Analytics)", "Хранилище обезличенных данных для BI/ML/AI")
+  SystemDb(operational_db, "Operational DB", "Хранилище операционных данных (шифрованное)")
+}
+
+' Связи между внешними пользователями и системой
+Rel(patient, portal, "Запись, оплата, просмотр данных", "HTTPS/TLS 1.3")
+Rel(admin, portal, "Управление расписанием и пациентами", "HTTPS/TLS 1.3 + MFA")
+Rel(doctor, portal, "Просмотр/редактирование карт, назначения", "HTTPS/TLS 1.3 + MFA")
+Rel(cashier, portal, "Приём оплаты", "HTTPS/TLS 1.3 + MFA")
+Rel(accountant, portal, "Бухгалтерские операции", "HTTPS/TLS 1.3 + MFA")
+Rel(storekeeper, portal, "Учёт ТМЦ", "HTTPS/TLS 1.3 + MFA")
+Rel(analyst, data_lake, "Аналитика, построение моделей", "HTTPS/TLS 1.3")
+
+' Связи между компонентами внутри системы
+Rel(portal, api_gw, "Все запросы")
+Rel(api_gw, iam, "Проверка токена")
+Rel(api_gw, backend, "Маршрутизация")
+Rel(backend, policy, "Проверка доступа на основе тегов")
+Rel(backend, operational_db, "CRUD операций (шифрованно)")
+Rel(backend, encryption, "Шифрование/дешифрование")
+Rel(backend, audit, "Логирование действий")
+Rel(backend, tagging, "Применение тегов к данным")
+Rel(backend, anonymization, "Передача данных в аналитический слой")
+Rel(anonymization, data_lake, "Обезличенные данные")
+Rel(backend, lab, "Запросы к лаборатории", "mTLS")
+Rel(lab, backend, "Результаты анализов", "mTLS")
+
+' Пояснения (многострочные блоки)
+note right of policy
+  <color:green>Реализует ABAC на основе тегов</color>
+end note
+
+note right of anonymization
+  <color:green>Удаляет ПДн/PII, применяет</color>
+  <color:green>k‑анонимность и дифференциальную</color>
+  <color:green>приватность</color>
+end note
+
+note right of data_lake
+  <color:green>Хранит только обезличенные</color>
+  <color:green>данные (без ПДн/PII)</color>
+end note
+
+@enduml
